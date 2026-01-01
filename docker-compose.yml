@@ -1,0 +1,146 @@
+services:
+  # PostgreSQL Database for Auth Service
+  auth-db:
+    image: postgres:16-alpine
+    container_name: auth-db
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL Database for Route Service
+  route-db:
+    image: postgres:16-alpine
+    container_name: route-db
+    environment:
+      POSTGRES_DB: route_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - route_db_data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Eureka Discovery Server
+  eureka-discovery:
+    build:
+      context: ./eureka-discovery
+      dockerfile: Dockerfile
+    container_name: eureka-discovery
+    ports:
+      - "8761:8761"
+    environment:
+      - EUREKA_SERVER_URI=http://eureka-discovery:8761/eureka/
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8761 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Auth Service
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=jdbc:postgresql://auth-db:5432/auth_db
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - EUREKA_SERVER_URI=http://eureka-discovery:8761/eureka/
+      - JWT_SECRET=your-256-bit-secret-key-change-this-in-production-environment-must-be-at-least-32-characters
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      eureka-discovery:
+        condition: service_started
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8081 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Route Service
+  route:
+    build:
+      context: ./route
+      dockerfile: Dockerfile
+    container_name: route-service
+    ports:
+      - "8082:8082"
+    environment:
+      - DATABASE_URL=jdbc:postgresql://route-db:5432/route_db
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - EUREKA_SERVER_URI=http://eureka-discovery:8761/eureka/
+    depends_on:
+      route-db:
+        condition: service_healthy
+      eureka-discovery:
+        condition: service_started
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8082 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    ports:
+      - "10000:10000"
+    environment:
+      - EUREKA_SERVER_URI=http://eureka-discovery:8761/eureka/
+    depends_on:
+      - eureka-discovery
+      - auth-service
+      - route
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 10000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  microservices-network:
+    driver: bridge
+
+volumes:
+  auth_db_data:
+  route_db_data:
+
