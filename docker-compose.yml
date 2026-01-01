@@ -39,6 +39,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # PostgreSQL Database for Destination Service
+  destination-db:
+    image: postgres:16-alpine
+    container_name: destination-db
+    environment:
+      POSTGRES_DB: destination_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - destination_db_data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Eureka Discovery Server
   eureka-discovery:
     build:
@@ -113,6 +133,33 @@ services:
       retries: 3
       start_period: 60s
 
+  # Destination Service
+  destination:
+    build:
+      context: ./destination
+      dockerfile: Dockerfile
+    container_name: destination-service
+    ports:
+      - "8083:8083"
+    environment:
+      - DATABASE_URL=jdbc:postgresql://destination-db:5432/destination_db
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - EUREKA_SERVER_URI=http://eureka-discovery:8761/eureka/
+    depends_on:
+      destination-db:
+        condition: service_healthy
+      eureka-discovery:
+        condition: service_started
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8083 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   # API Gateway
   api-gateway:
     build:
@@ -127,6 +174,7 @@ services:
       - eureka-discovery
       - auth-service
       - route
+      - destination
     networks:
       - microservices-network
     healthcheck:
@@ -143,4 +191,5 @@ networks:
 volumes:
   auth_db_data:
   route_db_data:
+  destination_db_data:
 

@@ -33,6 +33,7 @@ spring:
         locator:
           enabled: true
           lowerCaseServiceId: true
+
       routes:
         - id: auth-service
           uri: lb://auth-service
@@ -58,6 +59,18 @@ spring:
             - Path=/api/v3/api-docs/route
           filters:
             - RewritePath=/api/v3/api-docs/route, /v3/api-docs
+        - id: destination-service
+          uri: lb://destination
+          predicates:
+            - Path=/api/destination/**
+          filters:
+            - StripPrefix=2
+        - id: destination-service-docs
+          uri: lb://destination
+          predicates:
+            - Path=/api/v3/api-docs/destination
+          filters:
+            - RewritePath=/api/v3/api-docs/destination, /v3/api-docs
 
 springdoc:
   swagger-ui:
@@ -66,6 +79,8 @@ springdoc:
         url: /api/v3/api-docs/auth
       - name: Route Service API
         url: /api/v3/api-docs/route
+      - name: Destination Service API
+        url: /api/v3/api-docs/destination
 
 management:
   endpoint:
