@@ -59,6 +59,26 @@ services:
       timeout: 5s
       retries: 5
 
+  # PostgreSQL Database for Generic Service
+  generic-db:
+    image: postgres:16-alpine
+    container_name: generic-db
+    environment:
+      POSTGRES_DB: generic_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    volumes:
+      - generic_db_data:/var/lib/postgresql/data
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Apache Kafka (KRaft mode - no Zookeeper)
   kafka-1:
     image: apache/kafka
@@ -206,6 +226,38 @@ services:
       retries: 3
       start_period: 60s
 
+  # Generic Service
+  generic:
+    build:
+      context: ./generic
+      dockerfile: Dockerfile
+      args:
+        MY_MODULE: generic
+    container_name: generic-service
+    ports:
+      - "8084:8080"
+    environment:
+      - DATABASE_URL=jdbc:postgresql://generic-db:5432/generic_db
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - EUREKA_SERVER_URI=http://eureka-discovery:8761/eureka/
+      - KAFKA_BOOTSTRAP_SERVERS=kafka-1:9094
+    depends_on:
+      generic-db:
+        condition: service_healthy
+      eureka-discovery:
+        condition: service_started
+      kafka-1:
+        condition: service_started
+    networks:
+      - microservices-network
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
   # API Gateway
   api-gateway:
     build:
@@ -221,6 +273,7 @@ services:
       - auth-service
       - route
       - destination
+      - generic
     networks:
       - microservices-network
     healthcheck:
@@ -238,4 +291,5 @@ volumes:
   auth_db_data:
   route_db_data:
   destination_db_data:
+  generic_db_data:
 

@@ -71,6 +71,18 @@ spring:
             - Path=/api/v3/api-docs/destination
           filters:
             - RewritePath=/api/v3/api-docs/destination, /v3/api-docs
+        - id: generic-service
+          uri: lb://generic
+          predicates:
+            - Path=/api/generic/**
+          filters:
+            - StripPrefix=2
+        - id: generic-service-docs
+          uri: lb://generic
+          predicates:
+            - Path=/api/v3/api-docs/generic
+          filters:
+            - RewritePath=/api/v3/api-docs/generic, /v3/api-docs
 
 springdoc:
   swagger-ui:
@@ -81,6 +93,8 @@ springdoc:
         url: /api/v3/api-docs/route
       - name: Destination Service API
         url: /api/v3/api-docs/destination
+      - name: Generic Service API
+        url: /api/v3/api-docs/generic
 
 management:
   endpoint:
